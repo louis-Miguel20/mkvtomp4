@@ -1,2 +1,8 @@
 [server]
-maxUploadSize = 50000
+maxUploadSize = 10000
+enableCORS = false
+enableXsrfProtection = false
+headless = true
+
+[browser]
+gatherUsageStats = false

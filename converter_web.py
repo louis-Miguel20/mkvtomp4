@@ -40,12 +40,49 @@ def time_to_seconds(time_str):
 # --- INTERFAZ ---
 
 # Selector de modo simplificado
-input_method = st.radio("Método de entrada:", ["📁 Subir Video (Cualquier tamaño)", "🔗 Usar archivo existente en el servidor"])
+input_method = st.radio(
+    "Método de entrada:", 
+    ["📁 Subir Video (Desde tu PC)", "🌐 Descargar desde URL (Más rápido para la nube)", "🔗 Usar archivo existente en el servidor"]
+)
 
 input_path = None
 uploaded_temp_file = "temp_input_video"
 
-if input_method == "📁 Subir Video (Cualquier tamaño)":
+if input_method == "🌐 Descargar desde URL (Más rápido para la nube)":
+    st.info("💡 Opción recomendada para archivos muy grandes si están en internet.")
+    url = st.text_input("Pega el enlace directo del video (o de YouTube):")
+    
+    if url:
+        if "youtube.com" in url or "youtu.be" in url:
+            st.warning("⚠️ Para YouTube necesitas tener 'yt-dlp' instalado. (Aún no implementado en este script básico)")
+        else:
+            if st.button("⬇ Descargar al servidor"):
+                try:
+                    import urllib.request
+                    filename = url.split("/")[-1]
+                    if not filename: filename = "video_descargado.mp4"
+                    
+                    # Limpiar query params
+                    if "?" in filename: filename = filename.split("?")[0]
+                    
+                    st.text(f"Descargando: {filename}...")
+                    
+                    # Barra de progreso simple
+                    progress_bar_dl = st.progress(0)
+                    
+                    def dl_hook(count, block_size, total_size):
+                        if total_size > 0:
+                            percent = int(count * block_size * 100 / total_size)
+                            progress_bar_dl.progress(min(percent, 100))
+
+                    urllib.request.urlretrieve(url, filename, reporthook=dl_hook)
+                    st.success(f"✅ Descarga completada: {filename}")
+                    input_path = filename
+                    
+                except Exception as e:
+                    st.error(f"Error al descargar: {e}")
+
+elif input_method == "📁 Subir Video (Desde tu PC)":
     uploaded_file = st.file_uploader("Arrastra tu video aquí (Soporta archivos pesados)", type=['mkv', 'avi', 'mov', 'flv', 'wmv', 'webm', 'mp4'])
     
     if uploaded_file is not None:
