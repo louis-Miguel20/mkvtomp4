@@ -1,0 +1,24 @@
+# Binaries
+ffmpeg.exe
+ffmpeg.zip
+*.exe
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Videos
+*.mp4
+*.mkv
+*.avi
+*.mov
+*.flv
+*.wmv
+*.webm
+
+# VS Code
+.vscode/
+
+# Logs
+*.log
