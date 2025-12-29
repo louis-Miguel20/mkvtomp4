@@ -2,79 +2,117 @@ import streamlit as st
 import subprocess
 import os
 import time
-import sys
+import re
+import shutil
 
 # Configuración de la página
-st.set_page_config(page_title="Conversor de Video MP4", page_icon="🎬")
+st.set_page_config(page_title="Conversor de Video MP4", page_icon="🎬", layout="centered")
 
-st.title("🎬 Conversor de Video a MP4 (Web/Codespaces)")
-st.write("Convierte videos pesados a MP4 usando la potencia de la nube o tu servidor local.")
+st.title("🎬 Conversor de Video Universal")
+st.markdown("""
+Convierte tus videos (MKV, AVI, MOV...) a **MP4** compatible con todo.
+""")
 
-# Verificar FFmpeg en Linux/Codespaces
-def check_ffmpeg():
+# --- FUNCIONES ---
+
+def get_video_duration(input_path):
+    """Obtiene la duración del video en segundos usando ffmpeg."""
     try:
-        subprocess.run(["ffmpeg", "-version"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        return True
-    except FileNotFoundError:
-        return False
+        cmd = ["ffmpeg", "-i", input_path]
+        result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
+        # Buscar "Duration: 00:00:00.00" en stderr
+        match = re.search(r"Duration: (\d{2}):(\d{2}):(\d{2}\.\d{2})", result.stderr)
+        if match:
+            h, m, s = map(float, match.groups())
+            return h * 3600 + m * 60 + s
+    except:
+        pass
+    return 0
 
-if not check_ffmpeg():
-    st.error("❌ FFmpeg no está instalado.")
-    st.info("Si estás en Codespaces, ejecuta esto en la terminal: `sudo apt-get update && sudo apt-get install -y ffmpeg`")
-    st.stop()
+def time_to_seconds(time_str):
+    """Convierte HH:MM:SS.ms a segundos."""
+    try:
+        h, m, s = time_str.split(':')
+        return int(h) * 3600 + int(m) * 60 + float(s)
+    except:
+        return 0
 
-# Opción para seleccionar archivo
-option = st.radio("¿Dónde está tu video?", ["Subir archivo (Pequeños)", "Seleccionar archivo de la carpeta (Grandes)"])
+# --- INTERFAZ ---
+
+# Selector de modo simplificado
+input_method = st.radio("Método de entrada:", ["📁 Subir Video (Cualquier tamaño)", "🔗 Usar archivo existente en el servidor"])
 
 input_path = None
+uploaded_temp_file = "temp_input_video"
 
-if option == "Subir archivo (Pequeños)":
-    uploaded_file = st.file_uploader("Elige un video", type=['mkv', 'avi', 'mov', 'flv', 'wmv', 'webm', 'mp4'])
+if input_method == "📁 Subir Video (Cualquier tamaño)":
+    uploaded_file = st.file_uploader("Arrastra tu video aquí (Soporta archivos pesados)", type=['mkv', 'avi', 'mov', 'flv', 'wmv', 'webm', 'mp4'])
+    
     if uploaded_file is not None:
-        # Guardar temporalmente
-        with open(uploaded_file.name, "wb") as f:
+        # Guardar el archivo subido en el disco para que FFmpeg pueda leerlo
+        # Usamos un nombre fijo temporal para no llenar el disco
+        with open(uploaded_temp_file, "wb") as f:
             f.write(uploaded_file.getbuffer())
-        input_path = uploaded_file.name
-        st.success(f"Archivo subido: {input_path}")
+        
+        # Renombrar con la extensión correcta para que ffmpeg no se queje
+        file_ext = os.path.splitext(uploaded_file.name)[1]
+        input_path = f"video_input{file_ext}"
+        if os.path.exists(input_path):
+            os.remove(input_path)
+        os.rename(uploaded_temp_file, input_path)
+        
+        st.success(f"✅ Archivo cargado: {uploaded_file.name} ({uploaded_file.size / (1024*1024):.1f} MB)")
 
 else:
-    # Listar archivos en el directorio actual
-    files = [f for f in os.listdir('.') if f.endswith(('.mkv', '.avi', '.mov', '.flv', '.wmv', '.webm', '.mp4'))]
+    # Listar archivos locales
+    files = [f for f in os.listdir('.') if f.lower().endswith(('.mkv', '.avi', '.mov', '.flv', '.wmv', '.webm', '.mp4')) and "_convertido" not in f]
     if not files:
-        st.warning("No se encontraron videos en la carpeta actual.")
+        st.warning("No hay videos en la carpeta del servidor. Sube uno primero o usa git clone.")
     else:
-        input_path = st.selectbox("Selecciona un video de la lista:", files)
+        selected_file = st.selectbox("Elige un archivo:", files)
+        if selected_file:
+            input_path = selected_file
 
-# Opciones de conversión
-st.subheader("Configuración")
-fast_mode = st.checkbox("Modo Rápido (Recomendado)", value=True)
+# Opciones
+with st.expander("⚙️ Configuración avanzada", expanded=True):
+    fast_mode = st.checkbox("⚡ Modo Rápido (Recomendado)", value=True, help="Usa el preset 'ultrafast'. Archivos un poco más grandes pero conversión muy rápida.")
 
-if input_path and st.button("🚀 Convertir a MP4"):
-    output_path = os.path.splitext(input_path)[0] + "_convertido.mp4"
+# Botón y Proceso
+if input_path:
+    output_filename = os.path.splitext(input_path)[0] + "_convertido.mp4"
     
-    preset = "ultrafast" if fast_mode else "medium"
-    
-    # Comando FFmpeg (Compatible con Linux/Windows)
-    cmd = [
-        "ffmpeg", 
-        "-y", 
-        "-i", input_path,
-        "-c:v", "libx264",
-        "-preset", preset,
-        "-crf", "23",
-        "-c:a", "aac",
-        "-movflags", "+faststart",
-        output_path
-    ]
-    
-    progress_bar = st.progress(0)
-    status_text = st.empty()
-    status_text.text("Iniciando conversión...")
-    
-    start_time = time.time()
-    
-    # Ejecutar proceso
-    try:
+    # Botón grande
+    if st.button("▶ COMENZAR CONVERSIÓN", type="primary", use_container_width=True):
+        
+        # 1. Preparación
+        progress_bar = st.progress(0)
+        status_text = st.empty()
+        log_expander = st.expander("Ver detalles del proceso")
+        log_text = ""
+        
+        status_text.info("⏳ Analizando video...")
+        
+        # Obtener duración total para la barra
+        total_duration = get_video_duration(input_path)
+        if total_duration > 0:
+            status_text.info(f"⏱ Duración detectada: {total_duration/60:.1f} minutos. Convirtiendo...")
+        
+        # Configurar FFmpeg
+        preset = "ultrafast" if fast_mode else "medium"
+        cmd = [
+            "ffmpeg", 
+            "-y", 
+            "-i", input_path,
+            "-c:v", "libx264",
+            "-preset", preset,
+            "-crf", "23",
+            "-c:a", "aac",
+            "-movflags", "+faststart",
+            output_filename
+        ]
+        
+        # 2. Ejecución
+        start_time = time.time()
         process = subprocess.Popen(
             cmd, 
             stdout=subprocess.PIPE, 
@@ -82,32 +120,40 @@ if input_path and st.button("🚀 Convertir a MP4"):
             universal_newlines=True
         )
         
-        # Intentar obtener duración para la barra de progreso (simple)
-        # Nota: En web es más complejo parsear en tiempo real perfecto sin bloquear, 
-        # así que usaremos un spinner o lectura básica.
-        
+        # 3. Monitoreo en tiempo real
         for line in process.stdout:
-            # Aquí podríamos parsear el progreso, pero para simplificar en web
-            # mostraremos los logs clave o mantendremos el spinner.
-            pass
+            # log_text += line
+            # log_expander.code(log_text[-1000:]) # Mostrar últimas líneas
             
+            if "time=" in line:
+                # Parsear tiempo: time=00:01:23.45
+                time_match = re.search(r"time=(\d{2}:\d{2}:\d{2}\.\d{2})", line)
+                if time_match and total_duration > 0:
+                    current_seconds = time_to_seconds(time_match.group(1))
+                    percent = int((current_seconds / total_duration) * 100)
+                    progress_bar.progress(min(percent, 100))
+                    status_text.text(f"🚀 Convirtiendo... {percent}%")
+        
         process.wait()
         
+        # 4. Finalización
         if process.returncode == 0:
             progress_bar.progress(100)
-            duration = time.time() - start_time
-            st.success(f"¡Éxito! Conversión terminada en {duration:.2f} segundos.")
+            end_time = time.time()
+            st.success(f"🎉 ¡TERMINADO! Tiempo total: {end_time - start_time:.1f}s")
             
             # Botón de descarga
-            with open(output_path, "rb") as f:
+            with open(output_filename, "rb") as f:
                 st.download_button(
-                    label="⬇ Descargar video convertido",
+                    label="⬇️ DESCARGAR VIDEO MP4",
                     data=f,
-                    file_name=output_path,
-                    mime="video/mp4"
+                    file_name=output_filename,
+                    mime="video/mp4",
+                    use_container_width=True
                 )
         else:
-            st.error("Hubo un error en la conversión.")
-            
-    except Exception as e:
-        st.error(f"Error: {e}")
+            st.error("❌ Ocurrió un error en la conversión.")
+            st.error("Revisa los logs para más detalles.")
+
+else:
+    st.info("👆 Sube un video o selecciona uno para empezar.")
