@@ -8,6 +8,10 @@ import shutil
 # Configuración de la página
 st.set_page_config(page_title="Conversor de Video MP4", page_icon="🎬", layout="centered")
 
+# --- ESTADO PERSISTENTE ---
+if 'input_path' not in st.session_state:
+    st.session_state['input_path'] = None
+
 st.title("🎬 Conversor de Video Universal")
 st.markdown("""
 Convierte tus videos (MKV, AVI, MOV...) a **MP4** compatible con todo.
@@ -45,7 +49,6 @@ input_method = st.radio(
     ["📁 Subir Video (Desde tu PC)", "🌐 Descargar desde URL (Más rápido para la nube)", "🔗 Usar archivo existente en el servidor"]
 )
 
-input_path = None
 uploaded_temp_file = "temp_input_video"
 
 if input_method == "🌐 Descargar desde URL (Más rápido para la nube)":
@@ -68,7 +71,7 @@ if input_method == "🌐 Descargar desde URL (Más rápido para la nube)":
                     
                     if output:
                         st.success(f"✅ Descarga de Drive completada: {output}")
-                        input_path = output
+                        st.session_state['input_path'] = output
                     else:
                         st.error("No se pudo descargar. Asegúrate de que el enlace sea 'Público' (Cualquiera con el enlace).")
                 except Exception as e:
@@ -97,7 +100,7 @@ if input_method == "🌐 Descargar desde URL (Más rápido para la nube)":
 
                     urllib.request.urlretrieve(url, filename, reporthook=dl_hook)
                     st.success(f"✅ Descarga completada: {filename}")
-                    input_path = filename
+                    st.session_state['input_path'] = filename
                     
                 except Exception as e:
                     st.error(f"Error al descargar: {e}")
@@ -127,12 +130,13 @@ elif input_method == "📁 Subir Video (Desde tu PC)":
         
         # Renombrar con la extensión correcta para que ffmpeg no se queje
         file_ext = os.path.splitext(uploaded_file.name)[1]
-        input_path = f"video_input{file_ext}"
-        if os.path.exists(input_path):
-            os.remove(input_path)
-        os.rename(uploaded_temp_file, input_path)
+        final_path = f"video_input{file_ext}"
+        if os.path.exists(final_path):
+            os.remove(final_path)
+        os.rename(uploaded_temp_file, final_path)
         
         st.success(f"✅ Archivo cargado: {uploaded_file.name} ({uploaded_file.size / (1024*1024):.1f} MB)")
+        st.session_state['input_path'] = final_path
 
 else:
     # Listar archivos locales
@@ -142,14 +146,17 @@ else:
     else:
         selected_file = st.selectbox("Elige un archivo:", files)
         if selected_file:
-            input_path = selected_file
+            st.session_state['input_path'] = selected_file
 
 # Opciones
 with st.expander("⚙️ Configuración avanzada", expanded=True):
     fast_mode = st.checkbox("⚡ Modo Rápido (Recomendado)", value=True, help="Usa el preset 'ultrafast'. Archivos un poco más grandes pero conversión muy rápida.")
 
 # Botón y Proceso
-if input_path:
+if st.session_state['input_path']:
+    input_path = st.session_state['input_path']
+    st.info(f"🎞️ Archivo seleccionado: **{input_path}**")
+    
     output_filename = os.path.splitext(input_path)[0] + "_convertido.mp4"
     
     # Botón grande
