@@ -210,7 +210,28 @@ if st.session_state['input_path']:
                     current_seconds = time_to_seconds(time_match.group(1))
                     percent = int((current_seconds / total_duration) * 100)
                     progress_bar.progress(min(percent, 100))
-                    status_text.text(f"🚀 Convirtiendo... {percent}%")
+                    
+                    # Cálculo de tiempo restante (ETA)
+                    elapsed_time = time.time() - start_time
+                    if elapsed_time > 1 and current_seconds > 0:
+                        # Velocidad promedio (segundos de video por segundo real)
+                        speed = current_seconds / elapsed_time
+                        remaining_video_seconds = total_duration - current_seconds
+                        eta_seconds = remaining_video_seconds / speed
+                        
+                        # Formatear tiempo
+                        if eta_seconds > 3600:
+                            h = int(eta_seconds // 3600)
+                            m = int((eta_seconds % 3600) // 60)
+                            eta_str = f"{h}h {m}m"
+                        else:
+                            m = int(eta_seconds // 60)
+                            s = int(eta_seconds % 60)
+                            eta_str = f"{m}m {s}s"
+                        
+                        status_text.markdown(f"🚀 **Convirtiendo... {percent}%** (Faltan aprox: **{eta_str}**)")
+                    else:
+                        status_text.markdown(f"🚀 **Convirtiendo... {percent}%** (Calculando tiempo...)")
         
         process.wait()
         
