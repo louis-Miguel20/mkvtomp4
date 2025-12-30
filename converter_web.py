@@ -55,6 +55,26 @@ if input_method == "🌐 Descargar desde URL (Más rápido para la nube)":
     if url:
         if "youtube.com" in url or "youtu.be" in url:
             st.warning("⚠️ Para YouTube necesitas tener 'yt-dlp' instalado. (Aún no implementado en este script básico)")
+        
+        elif "drive.google.com" in url:
+            if st.button("⬇ Descargar desde Google Drive"):
+                try:
+                    import gdown
+                    output_file = "video_drive.mp4"
+                    st.text(f"Descargando desde Drive...")
+                    
+                    # gdown maneja archivos grandes y confirmaciones automáticamente
+                    output = gdown.download(url, output_file, quiet=False, fuzzy=True)
+                    
+                    if output:
+                        st.success(f"✅ Descarga de Drive completada: {output}")
+                        input_path = output
+                    else:
+                        st.error("No se pudo descargar. Asegúrate de que el enlace sea 'Público' (Cualquiera con el enlace).")
+                except Exception as e:
+                    st.error(f"Error con gdown: {e}")
+                    st.info("Intenta instalar gdown: `pip install gdown` en la terminal.")
+
         else:
             if st.button("⬇ Descargar al servidor"):
                 try:
@@ -83,7 +103,21 @@ if input_method == "🌐 Descargar desde URL (Más rápido para la nube)":
                     st.error(f"Error al descargar: {e}")
 
 elif input_method == "📁 Subir Video (Desde tu PC)":
-    uploaded_file = st.file_uploader("Arrastra tu video aquí (Soporta archivos pesados)", type=['mkv', 'avi', 'mov', 'flv', 'wmv', 'webm', 'mp4'])
+    st.warning("⚠️ NOTA IMPORTANTE: Si ves un 'Error 413' o la subida falla con archivos muy grandes (+1GB), es una restricción de GitHub Codespaces, no de esta App.")
+    
+    with st.expander("💡 ¿Cómo subir archivos GIGANTES sin errores? (Leer aquí)", expanded=True):
+        st.markdown("""
+        **Opción A (Recomendada):**
+        1. Mira a la izquierda de tu pantalla, donde está la lista de archivos (`video_converter.py`, etc.).
+        2. **Arrastra tu video de 7GB directamente a esa lista** (fuera de esta página web, en el editor de código).
+        3. Espera a que se suba (verás un círculo de carga en VS Code).
+        4. Cuando termine, selecciona arriba la opción: **"🔗 Usar archivo existente en el servidor"**.
+        
+        **Opción B:**
+        Sube tu video a Google Drive, hazlo público y usa la opción **"🌐 Descargar desde URL"** de esta app.
+        """)
+        
+    uploaded_file = st.file_uploader("Arrastra tu video aquí (Intentar vía Web)", type=['mkv', 'avi', 'mov', 'flv', 'wmv', 'webm', 'mp4'])
     
     if uploaded_file is not None:
         # Guardar el archivo subido en el disco para que FFmpeg pueda leerlo
